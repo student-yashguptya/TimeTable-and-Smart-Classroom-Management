@@ -1,51 +1,45 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import viteLogo from "/vite.svg";
-import "./App.css";
+// src/App.jsx
+import React from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import HomePage from "./pages/HomePage.jsx";
+import LoginPage from "./pages/LoginPage.jsx";
+import ContactPage from "./pages/ContactPage.jsx";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
 
-function App() {
-  const [count, setCount] = useState(0);
+const App = () => {
+  return (
+    <BrowserRouter>
+      <div className="min-h-screen bg-background-light dark:bg-background-dark text-white">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        </Routes>
+        <ThemeToggle />
+      </div>
+    </BrowserRouter>
+  );
+};
+
+const ThemeToggle = () => {
+  const [isDark, setIsDark] = React.useState(
+    document.documentElement.classList.contains("dark")
+  );
+
+  const toggleTheme = () => {
+    document.documentElement.classList.toggle("dark");
+    setIsDark(document.documentElement.classList.contains("dark"));
+  };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 text-gray-800 p-6">
-      <div className="flex gap-6 mb-6">
-        <a href="https://vite.dev" target="_blank">
-          <img
-            src={viteLogo}
-            className="w-20 transition-transform hover:scale-110"
-            alt="Vite logo"
-          />
-        </a>
-
-        <a href="https://react.dev" target="_blank">
-          <img
-            src={reactLogo}
-            className="w-20 transition-transform hover:scale-110"
-            alt="React logo"
-          />
-        </a>
-      </div>
-
-      <h1 className="text-4xl font-bold mb-4">Vite + React + Tailwind</h1>
-
-      <div className="bg-white p-6 rounded-xl shadow-md flex flex-col items-center gap-4">
-        <button
-          className="px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          count is {count}
-        </button>
-
-        <p className="text-gray-600">
-          Edit <code className="text-purple-600">src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-
-      <p className="mt-6 text-gray-500">
-        Click on the Vite and React logos to learn more
-      </p>
-    </div>
+    <button
+      onClick={toggleTheme}
+      className="fixed bottom-4 right-4 z-50 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white shadow-md hover:bg-primary/90"
+    >
+      {isDark ? "Light Mode" : "Dark Mode"}
+    </button>
   );
-}
+};
 
 export default App;

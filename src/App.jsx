@@ -1,44 +1,98 @@
 // src/App.jsx
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import HomePage from "./pages/HomePage.jsx";
-import LoginPage from "./pages/LoginPage.jsx";
-import ContactPage from "./pages/ContactPage.jsx";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
+import HomePage from "./pages/HomePage";
+import LoginPage from "./pages/LoginPage";
+import ContactPage from "./pages/ContactPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+//import OtpVerificationPage from "./pages/OtpVerificationPage";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
+import TeacherDashboardPage from "./pages/TeacherDashboardPage";
+import StudentDashboardPage from "./pages/StudentDashboardPage";
+
+import CourseManagementPage from "./pages/courses/CourseManagementPage";
+import FacultyManagementPage from "./pages/teachers/FacultyManagementPage";
+import RoomManagementPage from "./pages/rooms/RoomManagementPage";
+import TimetablePage from "./pages/timetables/TimetablePage";
+
+import { AuthProvider } from "./context/AuthContext";
+import { ToastProvider } from "./context/ToastContext";
+import ProtectedRoute from "./components/routing/ProtectedRoute";
 
 const App = () => {
   return (
-    <BrowserRouter>
-      <div className="min-h-screen bg-background-light dark:bg-background-dark text-white">
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/contact" element={<ContactPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        </Routes>
-        <ThemeToggle />
-      </div>
-    </BrowserRouter>
-  );
-};
+    <ToastProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/contact" element={<ContactPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-const ThemeToggle = () => {
-  const [isDark, setIsDark] = React.useState(
-    document.documentElement.classList.contains("dark")
-  );
+            {/* Admin + subpages */}
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute allowedRoles={["Admin"]}>
+                  <AdminDashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/courses"
+              element={
+                <ProtectedRoute allowedRoles={["Admin"]}>
+                  <CourseManagementPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/teachers"
+              element={
+                <ProtectedRoute allowedRoles={["Admin"]}>
+                  <FacultyManagementPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/rooms"
+              element={
+                <ProtectedRoute allowedRoles={["Admin"]}>
+                  <RoomManagementPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/timetables"
+              element={
+                <ProtectedRoute allowedRoles={["Admin"]}>
+                  <TimetablePage />
+                </ProtectedRoute>
+              }
+            />
 
-  const toggleTheme = () => {
-    document.documentElement.classList.toggle("dark");
-    setIsDark(document.documentElement.classList.contains("dark"));
-  };
-
-  return (
-    <button
-      onClick={toggleTheme}
-      className="fixed bottom-4 right-4 z-50 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white shadow-md hover:bg-primary/90"
-    >
-      {isDark ? "Light Mode" : "Dark Mode"}
-    </button>
+            {/* Teacher / Student dashboards */}
+            <Route
+              path="/teacher"
+              element={
+                <ProtectedRoute allowedRoles={["Teacher"]}>
+                  <TeacherDashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/student"
+              element={
+                <ProtectedRoute allowedRoles={["Student"]}>
+                  <StudentDashboardPage />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ToastProvider>
   );
 };
 

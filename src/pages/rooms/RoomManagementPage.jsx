@@ -1,6 +1,8 @@
 // src/pages/rooms/RoomManagementPage.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import * as XLSX from "xlsx"; // 📌 Excel parsing
+
 import AdminSidebar from "../../components/admin/AdminSidebar";
 import AdminTopbar from "../../components/admin/AdminTopbar";
 import { useAuth } from "../../context/AuthContext";
@@ -14,10 +16,13 @@ const RoomManagementPage = () => {
   const [addModal, setAddModal] = useState(false);
   const [editModal, setEditModal] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false); // 🔹 Excel upload state
 
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const { showToast } = useToast();
+
+  const fileInputRef = useRef(null); // 🔹 hidden input ref
 
   const loadRooms = async () => {
     setIsLoading(true);
@@ -48,6 +53,70 @@ const RoomManagementPage = () => {
       room.type.toLowerCase().includes(search.toLowerCase())
   );
 
+  /* ---------- EXCEL UPLOAD FEATURE ---------- */
+
+  const handleExcelButtonClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const parseExcelToRooms = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+
+          const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+          // Expected Excel columns (you can adjust):
+          // Name | Type | Capacity
+          const mapped = json.map((row, index) => ({
+            name: row.Name || row.name || `Room ${index + 1}`,
+            type: row.Type || row.type || "",
+            capacity: Number(row.Capacity || row.capacity || 0),
+          }));
+
+          resolve(mapped);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+
+  const handleExcelChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+
+    try {
+      const roomsFromExcel = await parseExcelToRooms(file);
+
+      if (!roomsFromExcel.length) {
+        showToast("No room rows found in Excel.", "warning");
+      } else {
+        // 🔁 Backend / mock API bulk insert
+        await mockApi.bulkAddRooms(roomsFromExcel);
+        showToast(
+          `Imported ${roomsFromExcel.length} rooms from Excel.`,
+          "success"
+        );
+        loadRooms();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to import rooms from Excel.", "error");
+    } finally {
+      setIsUploading(false);
+      e.target.value = "";
+    }
+  };
+
   return (
     <div className="font-display bg-background-light dark:bg-background-dark">
       <div className="relative flex min-h-screen w-full">
@@ -56,11 +125,8 @@ const RoomManagementPage = () => {
 
         {/* Main */}
         <div className="flex-1 flex flex-col">
-          <AdminTopbar
-            search={search}
-            setSearch={setSearch}
-            onLogout={handleLogout}
-          />
+          {/* Topbar without search */}
+          <AdminTopbar onLogout={handleLogout} />
 
           <div className="p-4 md:p-10 space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -73,13 +139,61 @@ const RoomManagementPage = () => {
                 </p>
               </div>
 
-              <button
-                onClick={() => setAddModal(true)}
-                className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-white text-sm font-semibold shadow-md hover:bg-primary/90"
-              >
-                <span className="material-symbols-outlined text-base">add</span>
-                <span>Add Room</span>
-              </button>
+              <div className="flex flex-wrap gap-3">
+                {/* Excel Upload Button */}
+                <button
+                  onClick={handleExcelButtonClick}
+                  disabled={isUploading}
+                  className="flex items-center gap-2 h-10 px-4 rounded-lg bg-gray-100 dark:bg-black/30 text-gray-800 dark:text-gray-100 text-xs md:text-sm font-semibold shadow-sm hover:bg-gray-200 dark:hover:bg-black/50 disabled:opacity-60"
+                >
+                  {isUploading ? (
+                    <>
+                      <span className="material-symbols-outlined text-sm animate-spin">
+                        progress_activity
+                      </span>
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-base">
+                        upload_file
+                      </span>
+                      <span>Upload Excel</span>
+                    </>
+                  )}
+                </button>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={handleExcelChange}
+                />
+
+                {/* Add Room Button */}
+                <button
+                  onClick={() => setAddModal(true)}
+                  className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-white text-sm font-semibold shadow-md hover:bg-primary/90"
+                >
+                  <span className="material-symbols-outlined text-base">add</span>
+                  <span>Add Room</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 🔍 Search Rooms */}
+            <div className="max-w-sm">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                Search Rooms
+              </label>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name or type..."
+                className="w-full h-10 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-[#111827] px-3 text-sm text-gray-900 dark:text-white"
+              />
             </div>
 
             {isLoading ? (
@@ -140,6 +254,7 @@ const RoomManagementPage = () => {
               title="Add Room"
               onClose={() => setAddModal(false)}
               onSaved={loadRooms}
+              currentUserEmail={user?.email}
             />
           )}
 
@@ -149,6 +264,7 @@ const RoomManagementPage = () => {
               initialData={editModal}
               onClose={() => setEditModal(null)}
               onSaved={loadRooms}
+              currentUserEmail={user?.email}
             />
           )}
         </div>
@@ -195,7 +311,7 @@ const Btn = ({ label, onClick, type }) => {
 
 /* ---------- Room Modal (Add + Edit) ---------- */
 
-const RoomModal = ({ title, onClose, onSaved, initialData }) => {
+const RoomModal = ({ title, onClose, onSaved, initialData, currentUserEmail }) => {
   const { showToast } = useToast();
   const isEdit = !!initialData;
 
@@ -222,6 +338,12 @@ const RoomModal = ({ title, onClose, onSaved, initialData }) => {
           capacity: Number(capacity),
         });
         showToast("Room updated.", "success");
+
+        await mockApi.addActivity({
+          event: `Room updated: ${name} (${type || "Room"})`,
+          user: currentUserEmail || "Admin",
+          status: "Success",
+        });
       } else {
         await mockApi.addRoom({
           name,
@@ -229,6 +351,12 @@ const RoomModal = ({ title, onClose, onSaved, initialData }) => {
           capacity: Number(capacity),
         });
         showToast("Room added.", "success");
+
+        await mockApi.addActivity({
+          event: `Room added: ${name} (${type || "Room"})`,
+          user: currentUserEmail || "Admin",
+          status: "Success",
+        });
       }
 
       await onSaved();

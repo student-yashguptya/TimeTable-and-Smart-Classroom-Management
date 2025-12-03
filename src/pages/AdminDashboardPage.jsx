@@ -9,19 +9,49 @@ import AdminTopbar from "../components/admin/AdminTopbar";
 import AdminStatsGrid from "../components/admin/AdminStatsGrid";
 import AdminActivityTable from "../components/admin/AdminActivityTable";
 import AdminWelcomeSection from "../components/admin/AdminWelcomeSection";
+import { mockApi } from "../mock/mockApi";
 
 const AdminDashboardPage = () => {
-  const [search, setSearch] = useState("");
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Dynamic stats state
+  const [stats, setStats] = useState({
+    totalClasses: 0,
+    registeredTeachers: 0,
+    availableRooms: 0,
+    timetableStatus: "Not generated",
+  });
+
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth(); // we’ll try to read user.email / user.isActive
   const { showToast } = useToast();
 
+  const loadStats = async () => {
+    try {
+      const [courses, teachers, rooms, timetable] = await Promise.all([
+        mockApi.getCourses(),
+        mockApi.getTeachers(),
+        mockApi.getRooms(),
+        mockApi.getTimetable(),
+      ]);
+
+      setStats({
+        totalClasses: courses.length,
+        registeredTeachers: teachers.length,
+        availableRooms: rooms.length,
+        timetableStatus:
+          timetable && timetable.length > 0 ? "Generated" : "Not generated",
+      });
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to load dashboard stats.", "error");
+    }
+  };
+
   useEffect(() => {
-    // page fade-in
     const t = setTimeout(() => setIsPageLoading(false), 500);
+    loadStats();
     return () => clearTimeout(t);
   }, []);
 
@@ -35,9 +65,25 @@ const AdminDashboardPage = () => {
     if (isGenerating) return;
     setIsGenerating(true);
     showToast("Generating timetable (demo)...", "info");
-    setTimeout(() => {
+
+    setTimeout(async () => {
       setIsGenerating(false);
       showToast("Timetable generated successfully (demo).", "success");
+
+      // Log this as a recent activity
+      try {
+        await mockApi.addActivity({
+          event: "Timetable generated from dashboard",
+          user: user?.email || "Admin",
+          date: new Date().toLocaleString(),
+          status: "Success",
+        });
+      } catch (e) {
+        console.error(e);
+      }
+
+      // Reload stats (timetable status)
+      loadStats();
     }, 1200);
   };
 
@@ -65,11 +111,8 @@ const AdminDashboardPage = () => {
 
         {/* Main */}
         <div className="flex-1 flex flex-col animate-[fadeIn_0.4s_ease-out]">
-          <AdminTopbar
-            search={search}
-            setSearch={setSearch}
-            onLogout={handleLogout}
-          />
+          {/* 🔹 Topbar now has NO search bar; only actions/profile */}
+          <AdminTopbar onLogout={handleLogout} />
 
           <div className="p-4 md:p-10 space-y-8">
             <AdminWelcomeSection
@@ -79,8 +122,10 @@ const AdminDashboardPage = () => {
               onAddClassroom={handleAddClassroom}
             />
 
-            <AdminStatsGrid />
+            {/* 🔹 Stats now show REAL counts from mockApi */}
+            <AdminStatsGrid stats={stats} />
 
+            {/* 🔹 Recent activity now loads from mockApi */}
             <AdminActivityTable />
           </div>
         </div>

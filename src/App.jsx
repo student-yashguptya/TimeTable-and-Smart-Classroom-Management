@@ -18,6 +18,7 @@ import TimetablePage from "./pages/timetables/TimetablePage";
 import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
+import NotificationsPage from "./pages/admin/NotificationsPage";
 
 const App = () => {
   return (
@@ -31,6 +32,7 @@ const App = () => {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
             {/* Admin + subpages */}
+            <Route path="/admin/notifications" element={<NotificationsPage />} />
             <Route
               path="/admin"
               element={

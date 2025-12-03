@@ -1,5 +1,8 @@
-import React, { useEffect, useState } from "react";
+// src/pages/courses/CourseManagementPage.jsx
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import * as XLSX from "xlsx";
+
 import AdminSidebar from "../../components/admin/AdminSidebar";
 import AdminTopbar from "../../components/admin/AdminTopbar";
 import { useAuth } from "../../context/AuthContext";
@@ -14,10 +17,13 @@ const CourseManagementPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const { showToast } = useToast();
+
+  const fileInputRef = useRef(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -57,11 +63,125 @@ const CourseManagementPage = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this course?")) return;
     try {
+      const toDelete = courses.find((c) => c.id === id);
       await mockApi.deleteCourse(id);
       showToast("Course deleted.", "success");
+
+      // Log recent activity
+      if (toDelete) {
+        await mockApi.addActivity({
+          event: `Course deleted: ${toDelete.code} - ${toDelete.name}`,
+          user: user?.email || "Admin",
+          status: "Success",
+        });
+      }
+
       loadData();
     } catch (err) {
       showToast("Failed to delete course.", "error");
+    }
+  };
+
+  /* ---------- EXCEL UPLOAD FEATURE ---------- */
+
+  const handleExcelButtonClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const parseExcelToCourses = (file, teachersList) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+
+          const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+          // Expected columns:
+          // Code | Name | Semester | Department | WeeklyHours | TeacherEmail (optional) | TeacherName (optional)
+          const mapped = json.map((row, index) => {
+            const code = row.Code || row.code || `C-${index + 1}`;
+            const name = row.Name || row.name || `Course ${index + 1}`;
+            const semester = row.Semester || row.semester || "";
+            const department = row.Department || row.department || "";
+            const weeklyHours = Number(row.WeeklyHours || row.weeklyHours || 0);
+
+            let teacherId = null;
+            const teacherEmail = String(
+              row.TeacherEmail || row.teacherEmail || ""
+            ).toLowerCase();
+            const teacherName = String(
+              row.TeacherName || row.teacherName || ""
+            ).toLowerCase();
+
+            if (teacherEmail || teacherName) {
+              const teacher = teachersList.find((t) => {
+                const tEmail = (t.email || "").toLowerCase();
+                const tName = (t.name || "").toLowerCase();
+                return (
+                  (teacherEmail && tEmail === teacherEmail) ||
+                  (teacherName && tName === teacherName)
+                );
+              });
+              if (teacher) {
+                teacherId = teacher.id;
+              }
+            }
+
+            return {
+              code,
+              name,
+              semester,
+              department,
+              weeklyHours,
+              teacherId,
+            };
+          });
+
+          resolve(mapped);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+
+  const handleExcelChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const coursesFromExcel = await parseExcelToCourses(file, teachers);
+
+      if (!coursesFromExcel.length) {
+        showToast("No course rows found in Excel.", "warning");
+      } else {
+        await mockApi.bulkAddCourses(coursesFromExcel);
+
+        // Log import as recent activity
+        await mockApi.addActivity({
+          event: `Imported ${coursesFromExcel.length} courses from Excel`,
+          user: user?.email || "Admin",
+          status: "Success",
+        });
+
+        showToast(
+          `Imported ${coursesFromExcel.length} courses from Excel.`,
+          "success"
+        );
+        loadData();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to import courses from Excel.", "error");
+    } finally {
+      setIsUploading(false);
+      e.target.value = "";
     }
   };
 
@@ -71,11 +191,8 @@ const CourseManagementPage = () => {
         <AdminSidebar />
 
         <div className="flex-1 flex flex-col">
-          <AdminTopbar
-            search={search}
-            setSearch={setSearch}
-            onLogout={handleLogout}
-          />
+          {/* 🔹 Topbar now just gets onLogout – no search props */}
+          <AdminTopbar onLogout={handleLogout} />
 
           <div className="p-4 md:p-10 space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -84,18 +201,68 @@ const CourseManagementPage = () => {
                   Courses
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Manage academic courses and assign faculty & weekly lectures.
+                  Manage academic courses, assign faculty & weekly lectures, or
+                  import via Excel.
                 </p>
               </div>
-              <button
-                onClick={() => setIsAddOpen(true)}
-                className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-white text-sm font-semibold shadow-md hover:bg-primary/90 hover:-translate-y-0.5 transition"
-              >
-                <span className="material-symbols-outlined text-base">
-                  add
-                </span>
-                <span>Add Course</span>
-              </button>
+
+              <div className="flex flex-wrap gap-3">
+                {/* Excel Upload Button */}
+                <button
+                  onClick={handleExcelButtonClick}
+                  disabled={isUploading}
+                  className="flex items-center gap-2 h-10 px-4 rounded-lg bg-gray-100 dark:bg-black/30 text-gray-800 dark:text-gray-100 text-xs md:text-sm font-semibold shadow-sm hover:bg-gray-200 dark:hover:bg-black/50 disabled:opacity-60"
+                >
+                  {isUploading ? (
+                    <>
+                      <span className="material-symbols-outlined text-sm animate-spin">
+                        progress_activity
+                      </span>
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-base">
+                        upload_file
+                      </span>
+                      <span>Upload Excel</span>
+                    </>
+                  )}
+                </button>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={handleExcelChange}
+                />
+
+                {/* Add Course Button */}
+                <button
+                  onClick={() => setIsAddOpen(true)}
+                  className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-white text-sm font-semibold shadow-md hover:bg-primary/90 hover:-translate-y-0.5 transition"
+                >
+                  <span className="material-symbols-outlined text-base">
+                    add
+                  </span>
+                  <span>Add Course</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Local search (since topbar search is gone) */}
+            <div className="max-w-sm">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                Search Courses
+              </label>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by code or name..."
+                className="w-full h-10 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-[#111827] px-3 text-sm text-gray-900 dark:text-white"
+              />
             </div>
 
             {isLoading ? (
@@ -201,7 +368,9 @@ const Td = ({ children, muted, colSpan }) => (
   <td
     colSpan={colSpan}
     className={`p-4 text-xs md:text-sm ${
-      muted ? "text-gray-500 dark:text-[#92a4c9]" : "text-gray-800 dark:text-white"
+      muted
+        ? "text-gray-500 dark:text-[#92a4c9]"
+        : "text-gray-800 dark:text-white"
     }`}
   >
     {children}
@@ -213,7 +382,7 @@ const CourseModal = ({ title, onClose, onSaved, teachers, initialData }) => {
   const { showToast } = useToast();
 
   const [code, setCode] = useState(initialData?.code || "");
-  const [name, setName] = useState(initialData?.name || "");
+  const [name, setName] = useState(initialData?.name || ""); // ✅ fixed
   const [semester, setSemester] = useState(initialData?.semester || "");
   const [department, setDepartment] = useState(initialData?.department || "");
   const [weeklyHours, setWeeklyHours] = useState(
@@ -251,6 +420,7 @@ const CourseModal = ({ title, onClose, onSaved, teachers, initialData }) => {
         });
         showToast("Course added.", "success");
       }
+
       await onSaved();
       onClose();
     } catch {

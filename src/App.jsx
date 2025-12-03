@@ -18,7 +18,7 @@ import TimetablePage from "./pages/timetables/TimetablePage";
 import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
-import NotificationsPage from "./pages/admin/NotificationsPage";
+import NotificationsPage from "./pages/notification/NotificationsPage";
 
 const App = () => {
   return (

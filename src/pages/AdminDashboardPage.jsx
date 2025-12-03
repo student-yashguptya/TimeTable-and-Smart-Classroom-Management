@@ -15,43 +15,12 @@ const AdminDashboardPage = () => {
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Dynamic stats state
-  const [stats, setStats] = useState({
-    totalClasses: 0,
-    registeredTeachers: 0,
-    availableRooms: 0,
-    timetableStatus: "Not generated",
-  });
-
   const navigate = useNavigate();
-  const { logout, user } = useAuth(); // we’ll try to read user.email / user.isActive
+  const { logout, user } = useAuth();
   const { showToast } = useToast();
-
-  const loadStats = async () => {
-    try {
-      const [courses, teachers, rooms, timetable] = await Promise.all([
-        mockApi.getCourses(),
-        mockApi.getTeachers(),
-        mockApi.getRooms(),
-        mockApi.getTimetable(),
-      ]);
-
-      setStats({
-        totalClasses: courses.length,
-        registeredTeachers: teachers.length,
-        availableRooms: rooms.length,
-        timetableStatus:
-          timetable && timetable.length > 0 ? "Generated" : "Not generated",
-      });
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to load dashboard stats.", "error");
-    }
-  };
 
   useEffect(() => {
     const t = setTimeout(() => setIsPageLoading(false), 500);
-    loadStats();
     return () => clearTimeout(t);
   }, []);
 
@@ -70,7 +39,6 @@ const AdminDashboardPage = () => {
       setIsGenerating(false);
       showToast("Timetable generated successfully (demo).", "success");
 
-      // Log this as a recent activity
       try {
         await mockApi.addActivity({
           event: "Timetable generated from dashboard",
@@ -81,9 +49,6 @@ const AdminDashboardPage = () => {
       } catch (e) {
         console.error(e);
       }
-
-      // Reload stats (timetable status)
-      loadStats();
     }, 1200);
   };
 
@@ -104,17 +69,17 @@ const AdminDashboardPage = () => {
   }
 
   return (
-    <div className="font-display bg-background-light dark:bg-background-dark">
+    <div className="font-display bg-background-light dark:bg-background-dark min-h-screen">
       <div className="relative flex min-h-screen w-full">
-        {/* Sidebar */}
+        {/* Sidebar (desktop) */}
         <AdminSidebar />
 
-        {/* Main */}
+        {/* Main content */}
         <div className="flex-1 flex flex-col animate-[fadeIn_0.4s_ease-out]">
-          {/* 🔹 Topbar now has NO search bar; only actions/profile */}
           <AdminTopbar onLogout={handleLogout} />
 
-          <div className="p-4 md:p-10 space-y-8">
+          {/* 💡 Responsive container */}
+          <div className="px-4 sm:px-6 lg:px-10 py-4 lg:py-8 max-w-7xl w-full mx-auto space-y-8">
             <AdminWelcomeSection
               onGenerate={handleGenerateTimetable}
               isGenerating={isGenerating}
@@ -122,10 +87,8 @@ const AdminDashboardPage = () => {
               onAddClassroom={handleAddClassroom}
             />
 
-            {/* 🔹 Stats now show REAL counts from mockApi */}
-            <AdminStatsGrid stats={stats} />
+            <AdminStatsGrid />
 
-            {/* 🔹 Recent activity now loads from mockApi */}
             <AdminActivityTable />
           </div>
         </div>
